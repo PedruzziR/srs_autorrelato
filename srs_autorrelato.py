@@ -6,44 +6,37 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 import datetime
-import base64 # <-- IMPORTAÇÃO NECESSÁRIA PARA A MARCA D'ÁGUA INFALÍVEL
+import base64
 
-# ================= BLOCO 1: MARCA D'ÁGUA SVG INFALÍVEL =================
+# ================= BLOCO 1: MARCA D'ÁGUA (SOLUÇÃO NATIVA STREAMLIT) =================
 def inject_watermark(nome_paciente, id_sessao):
     paciente_display = nome_paciente if nome_paciente else "PACIENTE NÃO IDENTIFICADO"
     token_display = id_sessao if id_sessao else "TOKEN"
     
-    # Criando um SVG dinâmico com o texto
+    # SVG simples para renderização perfeita
     svg = f"""
-    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
-        <g transform="translate(200,200) rotate(-35)">
-            <text text-anchor="middle" fill="rgba(150, 150, 150, 0.25)" font-size="20" font-family="Arial, sans-serif" font-weight="bold">
-                <tspan x="0" dy="-30">INSTRUMENTO SIGILOSO</tspan>
-                <tspan x="0" dy="30">{paciente_display}</tspan>
-                <tspan x="0" dy="30">{token_display}</tspan>
+    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+        <g transform="translate(150,150) rotate(-45)">
+            <text text-anchor="middle" fill="rgba(150, 150, 150, 0.18)" font-size="20" font-family="Arial, sans-serif" font-weight="bold">
+                <tspan x="0" dy="-25">INSTRUMENTO SIGILOSO</tspan>
+                <tspan x="0" dy="25">{paciente_display}</tspan>
+                <tspan x="0" dy="25">{token_display}</tspan>
             </text>
         </g>
     </svg>
     """
     
-    # Convertendo o SVG para Base64 para burlar bloqueios do Streamlit
+    # Conversão para Base64
     b64_svg = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
     
-    # Injetando na raiz (.stApp::before) para ficar por cima de tudo
+    # Aplica o background DIRETAMENTE no contêiner mestre do Streamlit
     watermark_style = f"""
     <style>
-    .stApp::before {{
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background-image: url("data:image/svg+xml;base64,{b64_svg}");
-        background-repeat: repeat;
-        background-position: center;
-        pointer-events: none;
-        z-index: 999999 !important;
+    [data-testid="stAppViewContainer"] {{
+        background-image: url("data:image/svg+xml;base64,{b64_svg}") !important;
+        background-repeat: repeat !important;
+        background-position: center !important;
+        background-attachment: fixed !important;
     }}
     </style>
     """
@@ -65,7 +58,6 @@ def conectar_planilha():
     ]
     creds = Credentials.from_service_account_info(creds_dict, scopes=escopos)
     client = gspread.authorize(creds)
-    # CONECTA DIRETAMENTE À PLANILHA CENTRAL DE TOKENS
     return client.open("Controle_Tokens").sheet1 
 
 try:
@@ -217,7 +209,7 @@ if st.session_state.avaliacao_concluida:
 # ================= VALIDAÇÃO SILENCIOSA DO TOKEN E CAPTURA DE NOME =================
 parametros = st.query_params
 token_url = parametros.get("token", None)
-nome_na_url = parametros.get("nome", "") # Smart Link Captura
+nome_na_url = parametros.get("nome", "") 
 
 if not token_url:
     st.warning("⚠️ Link de acesso inválido. Solicite um novo link à profissional.")
@@ -248,7 +240,7 @@ st.markdown(linha_fina, unsafe_allow_html=True)
 
 st.info("**Instrução:** Em cada questão, por favor escolha a alternativa que melhor descreva o seu comportamento nos últimos 6 meses.")
 
-# --- IDENTIFICAÇÃO FORA DO FORMULÁRIO ---
+# --- IDENTIFICAÇÃO FORA DO FORMULÁRIO (Essencial para atualizar o fundo em tempo real) ---
 st.subheader("Seus Dados (Avaliado/a)")
 nome_avaliado = st.text_input("Nome completo do(a) paciente *", value=nome_na_url)
 
@@ -258,7 +250,7 @@ with col1:
 with col2:
     sexo_avaliado = st.selectbox("Sexo *", ["Selecione", "Masculino", "Feminino"])
 
-# INJEÇÃO DA MARCA D'ÁGUA (Após a captura do nome)
+# --- ATIVA A MARCA D'ÁGUA ---
 inject_watermark(nome_avaliado, token_url)
 
 st.divider()
