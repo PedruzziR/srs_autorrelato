@@ -6,6 +6,48 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 import datetime
+import base64 # <-- IMPORTAÇÃO NECESSÁRIA PARA A MARCA D'ÁGUA INFALÍVEL
+
+# ================= BLOCO 1: MARCA D'ÁGUA SVG INFALÍVEL =================
+def inject_watermark(nome_paciente, id_sessao):
+    paciente_display = nome_paciente if nome_paciente else "PACIENTE NÃO IDENTIFICADO"
+    token_display = id_sessao if id_sessao else "TOKEN"
+    
+    # Criando um SVG dinâmico com o texto
+    svg = f"""
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+        <g transform="translate(200,200) rotate(-35)">
+            <text text-anchor="middle" fill="rgba(150, 150, 150, 0.25)" font-size="20" font-family="Arial, sans-serif" font-weight="bold">
+                <tspan x="0" dy="-30">INSTRUMENTO SIGILOSO</tspan>
+                <tspan x="0" dy="30">{paciente_display}</tspan>
+                <tspan x="0" dy="30">{token_display}</tspan>
+            </text>
+        </g>
+    </svg>
+    """
+    
+    # Convertendo o SVG para Base64 para burlar bloqueios do Streamlit
+    b64_svg = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
+    
+    # Injetando na raiz (.stApp::before) para ficar por cima de tudo
+    watermark_style = f"""
+    <style>
+    .stApp::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-image: url("data:image/svg+xml;base64,{b64_svg}");
+        background-repeat: repeat;
+        background-position: center;
+        pointer-events: none;
+        z-index: 999999 !important;
+    }}
+    </style>
+    """
+    st.markdown(watermark_style, unsafe_allow_html=True)
 
 # ================= CONFIGURAÇÕES DE E-MAIL =================
 SEU_EMAIL = st.secrets["EMAIL_USUARIO"]
@@ -172,9 +214,10 @@ if st.session_state.avaliacao_concluida:
     st.success("Avaliação concluída e enviada com sucesso! Muito obrigado(a) pela sua colaboração.")
     st.stop()
 
-# ================= VALIDAÇÃO SILENCIOSA DO TOKEN =================
+# ================= VALIDAÇÃO SILENCIOSA DO TOKEN E CAPTURA DE NOME =================
 parametros = st.query_params
 token_url = parametros.get("token", None)
+nome_na_url = parametros.get("nome", "") # Smart Link Captura
 
 if not token_url:
     st.warning("⚠️ Link de acesso inválido. Solicite um novo link à profissional.")
@@ -205,18 +248,23 @@ st.markdown(linha_fina, unsafe_allow_html=True)
 
 st.info("**Instrução:** Em cada questão, por favor escolha a alternativa que melhor descreva o seu comportamento nos últimos 6 meses.")
 
-with st.form("form_srs2_autorrelato"):
-    st.subheader("Seus Dados (Avaliado/a)")
-    nome_avaliado = st.text_input("Nome completo do(a) paciente *")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        data_nasc_avaliado = st.date_input("Data de nascimento *", format="DD/MM/YYYY", min_value=datetime.date(1900, 1, 1), max_value=datetime.date.today(), value=None)
-    with col2:
-        sexo_avaliado = st.selectbox("Sexo *", ["Selecione", "Masculino", "Feminino"])
-    
-    st.divider()
+# --- IDENTIFICAÇÃO FORA DO FORMULÁRIO ---
+st.subheader("Seus Dados (Avaliado/a)")
+nome_avaliado = st.text_input("Nome completo do(a) paciente *", value=nome_na_url)
 
+col1, col2 = st.columns(2)
+with col1:
+    data_nasc_avaliado = st.date_input("Data de nascimento *", format="DD/MM/YYYY", min_value=datetime.date(1900, 1, 1), max_value=datetime.date.today(), value=None)
+with col2:
+    sexo_avaliado = st.selectbox("Sexo *", ["Selecione", "Masculino", "Feminino"])
+
+# INJEÇÃO DA MARCA D'ÁGUA (Após a captura do nome)
+inject_watermark(nome_avaliado, token_url)
+
+st.divider()
+
+# --- FORMULÁRIO DE PERGUNTAS ---
+with st.form("form_srs2_autorrelato"):
     respostas_coletadas = {}
     for index, texto_pergunta in enumerate(perguntas):
         num_q = index + 1
